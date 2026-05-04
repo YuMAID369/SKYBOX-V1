@@ -1,0 +1,148 @@
+--[[ 
+    CUBNIT SKYBOX - MODO SKIN RECOVERY V14
+    INTERFACE: Ícone Minimalista (ID: 85260943538226)
+    LÓGICA: Salva a skin do Brookhaven e restaura ao desativar.
+]]
+
+local Players = game:GetService("Players")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local lp = Players.LocalPlayer
+
+-- --- CONFIGURAÇÕES DE ASSETS ---
+local ASSETS = {
+    TORSO = 100839513065432,
+    ANIM_ID = "rbxassetid://70883871260184",
+    ICON_ID = "rbxassetid://85260943538226"
+}
+
+-- --- VARIÁVEIS DE ESTADO E MEMÓRIA ---
+local skyActive = false
+local currentTrack = nil
+local lastClick = 0
+local doubleClickTime = 0.4 
+
+local savedSkin = {
+    Shirt = nil,
+    Pants = nil,
+    Body = nil
+}
+
+-- --- CRIAÇÃO DA UI ---
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.Name = "CubnitSkinRestoreSky"
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = game:GetService("CoreGui")
+
+local FloatingButton = Instance.new("ImageButton")
+FloatingButton.Name = "SkyToggleButton"
+FloatingButton.Size = UDim2.new(0, 65, 0, 65) 
+FloatingButton.Position = UDim2.new(0.5, -32, 0.1, 0)
+FloatingButton.BackgroundTransparency = 1
+FloatingButton.BorderSizePixel = 0
+FloatingButton.Image = ASSETS.ICON_ID
+FloatingButton.Active = true
+FloatingButton.Draggable = true 
+FloatingButton.Parent = ScreenGui
+
+-- --- FUNÇÕES DE MEMÓRIA DE SKIN ---
+
+local function SaveCurrentSkin()
+    local char = lp.Character
+    if not char then return end
+    
+    -- Tenta capturar os IDs atuais antes da transformação
+    pcall(function()
+        local shirt = char:FindFirstChildOfClass("Shirt")
+        local pants = char:FindFirstChildOfClass("Pants")
+        
+        if shirt then savedSkin.Shirt = shirt.ShirtTemplate end
+        if pants then savedSkin.Pants = pants.PantsTemplate end
+    end)
+end
+
+local function RestoreSkin()
+    local RS = game:GetService("ReplicatedStorage")
+    local remotes = RS:WaitForChild("Remotes")
+    
+    pcall(function()
+        -- Reseta para limpar a malha bugada do torso
+        remotes.ResetCharacterAppearance:FireServer()
+        task.wait(0.2)
+        
+        -- O Brookhaven recarrega a skin do servidor, mas se houver falha, 
+        -- você pode usar o editor de roupas do jogo uma vez para atualizar.
+        -- O ResetCharacterAppearance no Brookhaven geralmente volta para a skin que você montou no jogo.
+    end)
+end
+
+-- --- FUNÇÕES CORE ---
+
+local function ToggleSkybox()
+    local char = lp.Character
+    local hum = char and char:FindFirstChildOfClass("Humanoid")
+    local animator = hum and hum:FindFirstChildOfClass("Animator")
+    local RS = game:GetService("ReplicatedStorage")
+    
+    if not skyActive then
+        -- SALVAR SKIN ANTES DE ATIVAR
+        SaveCurrentSkin()
+        
+        skyActive = true
+        pcall(function()
+            RS.Remotes.ChangeCharacterBody:InvokeServer(unpack({{ASSETS.TORSO}}))
+            
+            local anim = Instance.new("Animation")
+            anim.AnimationId = ASSETS.ANIM_ID
+            currentTrack = animator:LoadAnimation(anim)
+            currentTrack.Priority = Enum.AnimationPriority.Action4
+            currentTrack.Looped = true
+            currentTrack:Play()
+        end)
+    else
+        -- DESATIVAR E RESTAURAR
+        skyActive = false
+        if currentTrack then currentTrack:Stop() end
+        RestoreSkin()
+    end
+end
+
+local function ShutdownScript()
+    skyActive = false
+    if currentTrack then currentTrack:Stop() end
+    RestoreSkin()
+    ScreenGui:Destroy()
+end
+
+-- --- LÓGICA DE CLIQUE ---
+
+FloatingButton.MouseButton1Click:Connect(function()
+    local currentTime = tick()
+    
+    if (currentTime - lastClick) < doubleClickTime then
+        ShutdownScript()
+        return
+    end
+    
+    lastClick = currentTime
+    
+    task.wait(doubleClickTime)
+    if (tick() - lastClick) >= doubleClickTime then
+        if ScreenGui.Parent then 
+            ToggleSkybox()
+        end
+    end
+end)
+
+-- Loop de manutenção visual
+RunService.RenderStepped:Connect(function()
+    if skyActive and lp.Character then
+        pcall(function()
+            for _, part in pairs(lp.Character:GetChildren()) do
+                if part:IsA("BasePart") and (part.Name:find("Arm") or part.Name:find("Leg")) then
+                    part.Transparency = 1
+                end
+            end
+        end)
+    end
+end)
