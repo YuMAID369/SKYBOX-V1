@@ -1,7 +1,7 @@
 --[[ 
-    CUBNIT SKYBOX - MODO SKIN RECOVERY V14
-    INTERFACE: Ícone Minimalista (ID: 85260943538226)
-    LÓGICA: Salva a skin do Brookhaven e restaura ao desativar.
+    CUBNIT SKYBOX - MODO MINIMALISTA V13
+    INTERFACE: Apenas ícone (ID: 85260943538226)
+    LÓGICA: Sem aplicação de camisa, apenas deformação de malha.
 ]]
 
 local Players = game:GetService("Players")
@@ -16,21 +16,15 @@ local ASSETS = {
     ICON_ID = "rbxassetid://85260943538226"
 }
 
--- --- VARIÁVEIS DE ESTADO E MEMÓRIA ---
+-- --- VARIÁVEIS DE ESTADO ---
 local skyActive = false
 local currentTrack = nil
 local lastClick = 0
 local doubleClickTime = 0.4 
 
-local savedSkin = {
-    Shirt = nil,
-    Pants = nil,
-    Body = nil
-}
-
--- --- CRIAÇÃO DA UI ---
+-- --- CRIAÇÃO DA UI INVISÍVEL ---
 local ScreenGui = Instance.new("ScreenGui")
-ScreenGui.Name = "CubnitSkinRestoreSky"
+ScreenGui.Name = "CubnitMinimalSky"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = game:GetService("CoreGui")
 
@@ -38,43 +32,12 @@ local FloatingButton = Instance.new("ImageButton")
 FloatingButton.Name = "SkyToggleButton"
 FloatingButton.Size = UDim2.new(0, 65, 0, 65) 
 FloatingButton.Position = UDim2.new(0.5, -32, 0.1, 0)
-FloatingButton.BackgroundTransparency = 1
+FloatingButton.BackgroundTransparency = 1 -- Fundo 100% transparente
 FloatingButton.BorderSizePixel = 0
 FloatingButton.Image = ASSETS.ICON_ID
 FloatingButton.Active = true
 FloatingButton.Draggable = true 
 FloatingButton.Parent = ScreenGui
-
--- --- FUNÇÕES DE MEMÓRIA DE SKIN ---
-
-local function SaveCurrentSkin()
-    local char = lp.Character
-    if not char then return end
-    
-    -- Tenta capturar os IDs atuais antes da transformação
-    pcall(function()
-        local shirt = char:FindFirstChildOfClass("Shirt")
-        local pants = char:FindFirstChildOfClass("Pants")
-        
-        if shirt then savedSkin.Shirt = shirt.ShirtTemplate end
-        if pants then savedSkin.Pants = pants.PantsTemplate end
-    end)
-end
-
-local function RestoreSkin()
-    local RS = game:GetService("ReplicatedStorage")
-    local remotes = RS:WaitForChild("Remotes")
-    
-    pcall(function()
-        -- Reseta para limpar a malha bugada do torso
-        remotes.ResetCharacterAppearance:FireServer()
-        task.wait(0.2)
-        
-        -- O Brookhaven recarrega a skin do servidor, mas se houver falha, 
-        -- você pode usar o editor de roupas do jogo uma vez para atualizar.
-        -- O ResetCharacterAppearance no Brookhaven geralmente volta para a skin que você montou no jogo.
-    end)
-end
 
 -- --- FUNÇÕES CORE ---
 
@@ -85,11 +48,11 @@ local function ToggleSkybox()
     local RS = game:GetService("ReplicatedStorage")
     
     if not skyActive then
-        -- SALVAR SKIN ANTES DE ATIVAR
-        SaveCurrentSkin()
-        
+        -- ATIVAR
         skyActive = true
+        
         pcall(function()
+            -- Removido WearShirt conforme solicitado
             RS.Remotes.ChangeCharacterBody:InvokeServer(unpack({{ASSETS.TORSO}}))
             
             local anim = Instance.new("Animation")
@@ -100,25 +63,26 @@ local function ToggleSkybox()
             currentTrack:Play()
         end)
     else
-        -- DESATIVAR E RESTAURAR
+        -- DESATIVAR
         skyActive = false
         if currentTrack then currentTrack:Stop() end
-        RestoreSkin()
+        RS.Remotes.ResetCharacterAppearance:FireServer()
     end
 end
 
 local function ShutdownScript()
     skyActive = false
     if currentTrack then currentTrack:Stop() end
-    RestoreSkin()
+    game:GetService("ReplicatedStorage").Remotes.ResetCharacterAppearance:FireServer()
     ScreenGui:Destroy()
 end
 
--- --- LÓGICA DE CLIQUE ---
+-- --- LÓGICA DE CLIQUE (TOGGLE / SHUTDOWN) ---
 
 FloatingButton.MouseButton1Click:Connect(function()
     local currentTime = tick()
     
+    -- Clique Duplo para fechar
     if (currentTime - lastClick) < doubleClickTime then
         ShutdownScript()
         return
@@ -126,6 +90,7 @@ FloatingButton.MouseButton1Click:Connect(function()
     
     lastClick = currentTime
     
+    -- Delay para validar clique único
     task.wait(doubleClickTime)
     if (tick() - lastClick) >= doubleClickTime then
         if ScreenGui.Parent then 
@@ -134,11 +99,12 @@ FloatingButton.MouseButton1Click:Connect(function()
     end
 end)
 
--- Loop de manutenção visual
+-- Loop de manutenção visual (Foco no Torso)
 RunService.RenderStepped:Connect(function()
     if skyActive and lp.Character then
         pcall(function()
             for _, part in pairs(lp.Character:GetChildren()) do
+                -- Esconde membros para a malha do torso ser a única visível no céu
                 if part:IsA("BasePart") and (part.Name:find("Arm") or part.Name:find("Leg")) then
                     part.Transparency = 1
                 end
